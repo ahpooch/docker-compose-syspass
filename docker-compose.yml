@@ -1,0 +1,64 @@
+version: '2'
+services:
+  nginx:
+    image: jwilder/nginx-proxy:alpine
+    container_name: syspass_nginx
+    restart: unless-stopped
+    networks:
+      - pre-existing
+      - nginx-to-webapp
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./ssl:/etc/nginx/certs
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  app:
+    container_name: syspass_app
+    image: syspass/syspass:3.2.10-php7.4
+    restart: always
+    ports:
+      - "443"
+    volumes:
+      - ./syspass-config:/var/www/html/sysPass/app/config
+      - ./syspass-backup:/var/www/html/sysPass/app/backup
+    environment:
+      - USE_SSL=no                     # explained at https://syspass-doc.readthedocs.io/en/3.1/installing/docker.html#id2
+      - VIRTUAL_PROTO=https            # explained at https://hub.docker.com/r/jwilder/nginx-proxy
+      - VIRTUAL_HOST=YOUR_VIRTUAL_HOST # explained at https://github.com/nginx-proxy/nginx-proxy
+      - VIRTUAL_PORT=443               # explained at https://github.com/nginx-proxy/nginx-proxy
+      - CERT_NAME=YOUR_VIRTUAL_HOST    # explained at https://github.com/nginx-proxy/nginx-proxy
+    networks: 
+      - nginx-to-webapp
+      - webapp-to-db
+  
+  db:
+    container_name: syspass_db
+    restart: always
+    image: mariadb:10.2
+    environment:
+      MYSQL_ROOT_PASSWORD: YOUR_ROOT_MYSQL_PASSWORD
+      MYSQL_DATABASE: syspass
+      MYSQL_USER: syspass
+      MYSQL_PASSWORD: YOUR_MYSQL_PASSWORD
+    networks:
+      - webapp-to-db
+    ports:
+      - "3306"
+    volumes:
+      - ./syspass-db:/var/lib/mysql
+
+volumes:
+  syspass-config:
+  syspass-backup:
+  syspass-db:
+
+networks:
+  webapp-to-db:
+  nginx-to-webapp:
+  pre-existing:
+    # You need to create external network if it's not exists.
+    # for example: docker network create syspass_pre-existing
+    name: syspass_pre-existing
+    external: true
